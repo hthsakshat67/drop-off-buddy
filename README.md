@@ -1,6 +1,6 @@
 # Drop-Off Buddy
 
-Drop-Off Buddy finds a fair, public carpool meet-up point for small teams. This free prototype uses local UI data and a visual map so it runs without accounts, paid APIs, or API keys.
+Drop-Off Buddy finds a fair, public carpool meet-up point for small teams. It uses free OpenStreetMap data and open-source Leaflet maps, with no accounts, paid APIs, or API keys.
 
 ## Run it locally
 
@@ -14,12 +14,19 @@ Then open the local URL printed by Vite.
 ## Included
 
 - Responsive setup screen for 2–5 riders
-- Add/remove riders and address validation guardrails
-- Animated map-style visual with home pins and a highlighted meet-up
-- Smooth reveal of the recommended “sweet spot”
+- Free address suggestions via OpenStreetMap Nominatim
+- Coordinate centroid calculation and nearby library, school, or park lookup through Overpass
+- Interactive OpenStreetMap with rider pins and a highlighted meetup
+- Try-the-demo mode with labeled sample addresses in Princeton, New Jersey
+- Native sharing and Google Maps directions links
+- Smooth reveal and responsive layout
 - Native share support with clipboard fallback
 - Production build via `npm run build`
 
-## Next production step
+## Data and availability
 
-Replace the local demo coordinates with a free-tier geocoder and POI provider (for example, OpenStreetMap Nominatim + Overpass with appropriate rate limiting) before handling real addresses. Keep API calls behind a small serverless proxy so home addresses are not exposed in client-side source.
+Live lookup uses community-run OpenStreetMap services. They are free, but rate-limited and can be temporarily unavailable. The demo mode works without address lookup and makes no network request for a rider's address. Tiles and Google Fonts load from their public hosts when online. The map uses OpenStreetMap contributors data.
+
+Addresses are only held in page memory. They are sent to Nominatim when a rider chooses an address and to Overpass as coordinates for nearby public-place lookup. They are not stored by this app.
+
+Opening `index.html` directly as a `file://` URL is not supported because Vite serves the JavaScript modules. Start the local server with `npm run dev -- --host 0.0.0.0` and open the localhost URL Vite prints.
