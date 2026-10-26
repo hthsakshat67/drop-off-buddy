@@ -1,32 +1,35 @@
 # Drop-Off Buddy
 
-Drop-Off Buddy finds a fair, public carpool meet-up point for small teams. It uses free OpenStreetMap data and open-source Leaflet maps, with no accounts, paid APIs, or API keys.
+Find a central public meetup point for a carpool of 2–5 riders. No account or API key required.
 
-## Run it locally
+## Run locally
 
 ```bash
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
 
-Then open the local URL printed by Vite.
+Open the localhost URL printed by Vite. Do not open `index.html` directly as a `file://` URL; the app needs to be served over HTTP.
 
-## Included
+## How it works
 
-- Responsive setup screen for 2–5 riders
-- Free address suggestions via OpenStreetMap Nominatim
-- Coordinate centroid calculation and nearby library, school, or park lookup through Overpass
-- Interactive OpenStreetMap with rider pins and a highlighted meetup
-- Try-the-demo mode with labeled sample addresses in Princeton, New Jersey
-- Native sharing and Google Maps directions links
-- Smooth reveal and responsive layout
-- Native share support with clipboard fallback
-- Production build via `npm run build`
+1. Search each rider’s address and select the matching result.
+2. Drop a pin for each selected home and calculate the center of their coordinates.
+3. Search OpenStreetMap data through Photon for a nearby library, school, or park.
+4. Show the result on the map with directions and a shareable pickup message.
 
-## Data and availability
+If map data contains no public venue within 10 km, the app shows the true center coordinate and says it could not confirm a public venue. The map data does not prove that a site is open, accessible, or safe at a given time; confirm the location before meeting.
 
-Live lookup uses community-run OpenStreetMap services. They are free, but rate-limited and can be temporarily unavailable. The demo mode works without address lookup and makes no network request for a rider's address. Tiles and Google Fonts load from their public hosts when online. The map uses OpenStreetMap contributors data.
+## Services and privacy
 
-Addresses are only held in page memory. They are sent to Nominatim when a rider chooses an address and to Overpass as coordinates for nearby public-place lookup. They are not stored by this app.
+- [Photon](https://github.com/komoot/photon) provides address search using OpenStreetMap data.
+- [Photon](https://github.com/komoot/photon) searches for nearby public places as well as addresses.
+- [Leaflet](https://leafletjs.com/) displays [OpenStreetMap](https://www.openstreetmap.org/copyright) map tiles.
 
-Opening `index.html` directly as a `file://` URL is not supported because Vite serves the JavaScript modules. Start the local server with `npm run dev -- --host 0.0.0.0` and open the localhost URL Vite prints.
+The public Photon service is free to use without an API key, but it has capacity limits and no availability guarantee. Address text is sent to Photon only when a rider searches; selected coordinates are sent to Photon to find nearby public places. Drop-Off Buddy does not save addresses.
+
+## Build
+
+```bash
+npm run build
+```
