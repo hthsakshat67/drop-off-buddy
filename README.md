@@ -27,6 +27,7 @@ The local index is used first when running; Photon’s public global endpoint is
 - Passwords are stored as salted scrypt hashes, never plaintext. The app requires 12–128 characters for new passwords.
 - Login sessions use random, HTTP-only, SameSite cookies; only token hashes are stored in SQLite. Login/signup requests are rate limited, and write requests reject cross-origin browser origins.
 - Saved trips are scoped to the account that created them. Users can reopen or delete their own saved trips. Password recovery/email verification are not configured; the app has no email delivery service.
+- Meetup filters (venue categories and custom excluded words) are stored per signed-in account. Signed-out filters are only held in memory for the current page session. Preschools and elementary/primary schools are always excluded from suggestions.
 - This is a self-hosted local backend, not a hosted cloud database. Other people can only use the same account database if you deploy the server and database to a shared, durable host. For an internet-facing deployment, use HTTPS and a persistent, backed-up disk; protect the host and database file. Do not expose port 4179 directly to the internet.
 - Address search is provided by Photon/OpenStreetMap (public network service by default); complete U.S. numbered addresses can also be sent to the U.S. Census Geocoder. Current location is requested only after the user opts in. A saved trip contains the addresses/coordinates and meetup details, and is written only after an explicit save action.
 

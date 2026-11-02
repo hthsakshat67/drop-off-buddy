@@ -1,4 +1,5 @@
 import './styles.css';
+import { shouldExcludeMeetup } from './venue-filters.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -11,6 +12,9 @@ let result = null;
 let currentUser = null;
 let savedCarpools = [];
 let accountMode = 'login';
+let accountPanel = 'account';
+let accountJustCreated = false;
+let meetupFilters = { excludedCategories: ['childSchools'], excludedTerms: [] };
 const MAX_RIDERS = 10;
 let censusRequestId = 0;
 const PUBLIC_PHOTON = 'https://photon.komoot.io';
@@ -55,10 +59,10 @@ addRider(); addRider();
 function render() {
   app.innerHTML = `
     <div class="page">
-      <header class="topbar" id="top"><a class="wordmark" href="#top" aria-label="Drop-Off Buddy home"><span>DROP-OFF<br><b>BUDDY</b></span></a><div class="nav-actions"><button class="account-trigger" id="account-trigger">${currentUser ? `☻ ${esc(currentUser.email)}` : 'SIGN IN'} <span>↗</span></button><a class="top-cta" href="#planner">PLAN A PICKUP <span>↓</span></a></div></header>
+      <header class="topbar" id="top"><a class="wordmark" href="#top" aria-label="Drop-Off Buddy home"><span>DROP-OFF<br><b>BUDDY</b></span></a><div class="nav-actions"><button class="settings-trigger" id="settings-trigger" type="button">⚙ SETTINGS</button><button class="account-trigger" id="account-trigger">${currentUser ? `☻ ${esc(currentUser.email)}` : 'SIGN IN'} <span>↗</span></button><a class="top-cta" href="#planner">PLAN A PICKUP <span>↓</span></a></div></header>
       <main>
-        <section class="hero" data-reveal><div class="hero-copy"><p class="eyebrow"><span></span> ONE CREW. ONE SMARTER MEETUP.</p><h1>Meet in the<br><strong>middle of it all.</strong></h1><p class="hero-text">Bring the group’s starting points together. Find a central meetup, compare a nearby option, and share directions in seconds.</p><a class="hero-link" href="#planner">Plan your carpool <b>↓</b></a><div class="hero-proof"><span>01 <b>UP TO 10 RIDERS</b></span><span>02 <b>250 KM GROUP LIMIT</b></span><span>03 <b>WORLDWIDE PLACE SEARCH</b></span></div></div><div class="hero-art"><img src="/drop-off-buddy-art.png" alt="Drop-Off Buddy — a carpool crew heading out together"/><span class="art-caption">LESS DRIVING. MORE TEAM TIME.</span><div class="art-sticker">✦<b>LET’S<br>ROLL</b></div></div></section>
-        <section class="world-strip" data-reveal><div><span class="world-symbol">◎</span><b>YOUR CREW, WHEREVER YOU ARE.</b><span>Search addresses and places across the globe.</span></div><div class="country-chips"><span>US</span><span>CA</span><span>MX</span><span>BR</span><span>UK</span><span>FR</span><span>DE</span><span>IN</span><span>JP</span><span>AU</span><span>ZA</span><span>+ WORLD</span></div></section>
+        <section class="hero" data-reveal><div class="hero-copy"><p class="eyebrow"><span></span> CARPOOL PLANNING, MADE CLEAR</p><h1>One meetup.<br><strong>Less back-and-forth.</strong></h1><p class="hero-text">Add your group’s starting points. Find a fair midpoint, check nearby public places, and send everyone the same directions.</p><a class="hero-link" href="#planner">Build a carpool plan <b>↓</b></a><div class="hero-proof"><span>2–10 <b>STARTING POINTS</b></span><span>250 km <b>MAX GROUP SPAN</b></span><span>WORLDWIDE <b>ADDRESS SEARCH</b></span></div></div><div class="hero-art"><img src="/drop-off-buddy-art.png" alt="Drop-Off Buddy — a carpool crew heading out together"/><span class="art-caption">CARPOOL COORDINATION, SIMPLIFIED.</span><div class="art-sticker">✦<b>ONE<br>MEETUP</b></div></div></section>
+        <section class="world-strip" data-reveal><div><span class="world-symbol">◎</span><b>FROM STARTING POINTS TO SHARED DIRECTIONS</b><span>Search places · compare meetup options · save a plan to your account</span></div><a href="#planner">START A PLAN <span>→</span></a></section>
         <section class="planner" id="planner" data-reveal><div class="planner-head"><div><p class="eyebrow"><span></span> YOUR CARPOOL</p><h2>Where’s everyone starting?</h2><p class="planner-hint">Search addresses and places worldwide. Keep everyone within 250 km; choose a suggestion or use your location.</p></div><div class="rider-count"><b id="rider-count">${riders.length}</b><span> / ${MAX_RIDERS} riders</span></div></div>
           <div class="riders" id="riders">${riders.map(riderMarkup).join('')}</div>
         <div class="form-controls"><div class="rider-actions"><button class="add-button" id="add-rider" ${riders.length >= MAX_RIDERS ? 'disabled' : ''}><span>＋</span> Add rider</button><button class="location-button" id="use-location" ${riders.length >= MAX_RIDERS ? 'disabled' : ''}>⌖ Use my location</button></div><button class="find-button" id="find-meetup" disabled><span>Find meetup</span><b>→</b></button></div>
@@ -69,7 +73,7 @@ function render() {
         <section class="result" id="result" aria-live="polite"></section>
         <section class="how" data-reveal><div class="how-title"><p class="eyebrow"><span></span> BUILT FOR THE WHOLE CREW</p><h2>Less coordinating.<br><strong>More getting there.</strong></h2></div><div class="how-steps"><article><b>01</b><h3>Bring everyone in</h3><p>Search worldwide for addresses, streets, and public places. Add up to 10 riders.</p></article><article><b>02</b><h3>Find a fair meetup</h3><p>Get a central point and nearby public venues. Keep the group within 250 km.</p></article><article><b>03</b><h3>Save &amp; send</h3><p>Save plans to your private account and share a map link with the team.</p></article></div></section>
       </main><footer><a class="wordmark footer-mark" href="#top"><span>DROP-OFF <b>BUDDY</b></span></a><span>Made for getting there together.</span><span class="footer-contact"><a href="mailto:akshatchakrabartiac@gmail.com">Contact us · akshatchakrabartiac@gmail.com</a></span></footer>
-      <div class="account-backdrop" id="account-backdrop" hidden><section class="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title"><button class="modal-close" id="account-close" aria-label="Close">×</button><p class="eyebrow"><span></span> YOUR CARPOOL, YOURS</p><h2 id="account-title">${currentUser ? 'Your account' : accountMode === 'login' ? 'Welcome back.' : 'Create your account.'}</h2><p class="account-intro">${currentUser ? `Signed in as ${esc(currentUser.email)}. Your saved trips are private to your account.` : 'Sign in to save and reopen your carpools on this device. Plans are never saved without your account.'}</p><div id="account-content">${accountContent()}</div></section></div>
+      <div class="account-backdrop" id="account-backdrop" hidden><section class="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title"><button class="modal-close" id="account-close" aria-label="Close">×</button><p class="eyebrow"><span></span> DROP-OFF BUDDY</p><h2 id="account-title">${accountHeading()}</h2><p class="account-intro" id="account-intro">${esc(accountIntro())}</p><div id="account-content">${accountContent()}</div></section></div>
     </div>`;
   bindEvents();
   initializeMap();
@@ -85,10 +89,13 @@ function riderMarkup(rider, index) {
 
 function bindEvents() {
   document.querySelector('#account-trigger').addEventListener('click', openAccount);
+  document.querySelector('#settings-trigger').addEventListener('click', () => { accountPanel = 'settings'; openAccount(); refreshAccountContent(); });
   document.querySelector('#account-close').addEventListener('click', closeAccount);
   document.querySelector('#account-backdrop').addEventListener('click', (event) => { if (event.target.id === 'account-backdrop') closeAccount(); });
   document.querySelector('#account-content').addEventListener('click', handleAccountClick);
   document.querySelector('#account-content').addEventListener('submit', handleAccountSubmit);
+  document.querySelector('#account-content').addEventListener('change', handleSettingsChange);
+  document.querySelector('#account-content').addEventListener('input', handleSettingsInput);
   document.querySelector('#add-rider').addEventListener('click', () => {
     if (riders.length >= MAX_RIDERS) return;
     result = null;
@@ -123,24 +130,71 @@ function bindEvents() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers } });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Request failed. Please try again.');
+  let response;
+  try { response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers } }); }
+  catch { throw new Error('Can’t reach the account server. Check that Drop-Off Buddy is running, then try again.'); }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || `The account server returned HTTP ${response.status}. Try again; if it continues, restart Drop-Off Buddy.`);
+  if (!data) throw new Error('The account server sent an unreadable response. Restart Drop-Off Buddy and try again.');
   return data;
 }
 
+function accountHeading() {
+  if (accountPanel === 'settings') return 'Meetup settings';
+  if (currentUser) return accountJustCreated ? 'Account created.' : 'Your account';
+  return accountMode === 'signup' ? 'Create your account.' : 'Sign in to Drop-Off Buddy.';
+}
+
+function accountIntro() {
+  if (accountPanel === 'settings') return currentUser ? 'Choose what should never appear as a suggested meetup. These preferences are saved to your account.' : 'Choose meetup filters for this session. Sign in to save them to your account; signed-out settings disappear when you refresh.';
+  if (currentUser) return `Signed in as ${currentUser.email}. Your saved carpools and meetup filters belong to this account.`;
+  return accountMode === 'signup' ? 'Create an account to save carpools and sync your meetup filters on this device.' : 'Sign in to open saved carpools. New here? Choose Create account.';
+}
+
 function accountContent() {
-  if (currentUser) return `<div class="saved-header"><b>SAVED CARPOOLS</b><button type="button" class="text-button" data-account-action="logout">Sign out</button></div><div class="saved-list">${savedCarpools.length ? savedCarpools.map((trip) => `<article class="saved-trip"><button class="saved-trip-open" data-account-action="load" data-trip="${trip.id}"><b>${esc(trip.name)}</b><small>${new Date(trip.created_at).toLocaleDateString()}</small></button><button class="saved-trip-delete" aria-label="Delete ${esc(trip.name)}" data-account-action="delete" data-trip="${trip.id}">×</button></article>`).join('') : '<p class="saved-empty">No saved carpools yet. Find a meetup, then tap “Save this carpool.”</p>'}</div><p class="account-footnote">Your saved addresses are private to your account. You can delete a carpool whenever you like.</p>`;
-  return `<div class="auth-tabs"><button type="button" data-account-action="mode-login" class="${accountMode === 'login' ? 'active' : ''}">Sign in</button><button type="button" data-account-action="mode-signup" class="${accountMode === 'signup' ? 'active' : ''}">Create account</button></div><form id="auth-form"><label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label><label>Password<input name="password" type="password" autocomplete="${accountMode === 'login' ? 'current-password' : 'new-password'}" minlength="${accountMode === 'signup' ? 12 : 1}" maxlength="128" required placeholder="${accountMode === 'signup' ? 'At least 12 characters' : 'Your password'}"></label><p class="auth-error" id="auth-error" role="alert"></p><button class="auth-submit" type="submit">${accountMode === 'login' ? 'Sign in' : 'Create account'} <b>→</b></button></form><p class="account-footnote">Passwords are securely hashed. Sessions use private, HTTP-only cookies. No saved plans are created until you choose to save.</p>`;
+  const tabs = `<div class="account-panel-tabs"><button type="button" data-account-action="panel-account" class="${accountPanel === 'account' ? 'active' : ''}">Account</button><button type="button" data-account-action="panel-settings" class="${accountPanel === 'settings' ? 'active' : ''}">Meetup settings</button></div>`;
+  if (accountPanel === 'settings') return `${tabs}${settingsContent()}`;
+  if (currentUser) return `${tabs}<div class="saved-header"><b>SAVED CARPOOLS</b><button type="button" class="text-button" data-account-action="logout">Sign out</button></div><div class="saved-list">${savedCarpools.length ? savedCarpools.map((trip) => `<article class="saved-trip"><button class="saved-trip-open" data-account-action="load" data-trip="${trip.id}"><b>${esc(trip.name)}</b><small>${new Date(trip.created_at).toLocaleDateString()}</small></button><button class="saved-trip-delete" aria-label="Delete ${esc(trip.name)}" data-account-action="delete" data-trip="${trip.id}">×</button></article>`).join('') : '<p class="saved-empty">No saved carpools yet. Find a meetup, then tap “Save this carpool.”</p>'}</div><p class="account-footnote">Your saved addresses are private to your account. You can delete a carpool whenever you like.</p>`;
+  return `${tabs}<p class="service-status checking" id="auth-service-status" role="status">Checking account service…</p><div class="auth-tabs"><button type="button" data-account-action="mode-login" class="${accountMode === 'login' ? 'active' : ''}">Sign in</button><button type="button" data-account-action="mode-signup" class="${accountMode === 'signup' ? 'active' : ''}">Create account</button></div><form id="auth-form"><label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label><label>Password<input name="password" type="password" autocomplete="${accountMode === 'login' ? 'current-password' : 'new-password'}" minlength="${accountMode === 'signup' ? 12 : 1}" maxlength="128" required placeholder="${accountMode === 'signup' ? 'At least 12 characters' : 'Your password'}"></label>${accountMode === 'signup' ? '<label>Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" required placeholder="Enter the same password again"></label>' : ''}<p class="auth-error" id="auth-error" role="alert"></p><button class="auth-submit" type="submit">${accountMode === 'login' ? 'Sign in' : 'Create account'} <b>→</b></button></form><p class="account-footnote">Passwords are securely hashed. Sessions use private, HTTP-only cookies. No saved plans are created until you choose to save.</p>`;
+}
+
+function settingsContent() {
+  const excluded = new Set(meetupFilters.excludedCategories);
+  const options = [
+    ['childSchools', 'Preschools & elementary schools', 'Always excluded from meetup suggestions for safety.', true],
+    ['soccerFields', 'Soccer / football fields', 'Exclude mapped pitches and soccer venues.'],
+    ['parks', 'Public parks', 'Exclude public parks.'],
+    ['libraries', 'Libraries', 'Exclude public libraries.'],
+    ['colleges', 'Colleges & universities', 'Exclude college and university venues.'],
+    ['highSchools', 'High schools', 'Exclude high-school venues.'],
+  ];
+  const checks = options.map(([key, label, hint, locked]) => `<label class="filter-option"><input type="checkbox" data-filter-category="${key}" ${excluded.has(key) ? 'checked' : ''} ${locked ? 'disabled' : ''}><span><b>${label}</b><small>${hint}</small></span></label>`).join('');
+  return `<div class="filter-list">${checks}</div><label class="filter-terms-label" for="filter-terms">Also exclude venues with these words</label><textarea id="filter-terms" rows="2" maxlength="500" placeholder="For example: playground, stadium">${esc(meetupFilters.excludedTerms.join(', '))}</textarea><p class="settings-note">Comma-separated. Filters match venue names and types. ${currentUser ? 'Saved to your account when you press Save settings.' : 'These filters apply until you refresh; sign in to save them.'}</p><button class="auth-submit" type="button" data-account-action="save-settings">${currentUser ? 'Save settings' : 'Apply for this session'} <b>→</b></button>`;
+}
+
+function updateAccountHeader() {
+  const title = document.querySelector('#account-title'); const intro = document.querySelector('#account-intro');
+  if (title) title.textContent = accountHeading();
+  if (intro) intro.textContent = accountIntro();
+}
+
+async function loadMeetupSettings() {
+  const response = await api('/api/settings');
+  meetupFilters = { excludedCategories: [...new Set(['childSchools', ...(response.settings?.excludedCategories || [])])], excludedTerms: response.settings?.excludedTerms || [] };
 }
 
 function openAccount() {
   const backdrop = document.querySelector('#account-backdrop'); backdrop.hidden = false;
   if (currentUser) refreshSavedCarpools();
-  else document.querySelector('#account-content input')?.focus();
+  else {
+    document.querySelector('#account-content input')?.focus();
+    const status = document.querySelector('#auth-service-status');
+    if (status) api('/api/health').then(() => { if (status.isConnected) { status.textContent = 'Account service connected'; status.className = 'service-status online'; } }).catch((error) => { if (status.isConnected) { status.textContent = error.message; status.className = 'service-status offline'; } });
+  }
 }
 function closeAccount() { const backdrop = document.querySelector('#account-backdrop'); if (backdrop) backdrop.hidden = true; }
 function refreshAccountContent() { const target = document.querySelector('#account-content'); if (target) target.innerHTML = accountContent(); }
+function refreshAccountModal() { refreshAccountContent(); updateAccountHeader(); }
 async function refreshSavedCarpools() {
   try { savedCarpools = (await api('/api/carpools')).carpools; refreshAccountContent(); }
   catch (error) { if (error.message.includes('Sign in')) { currentUser = null; savedCarpools = []; refreshAccountContent(); } }
@@ -150,20 +204,36 @@ async function handleAccountSubmit(event) {
   if (event.target.id !== 'auth-form') return;
   event.preventDefault();
   const form = new FormData(event.target); const button = event.target.querySelector('.auth-submit');
+  const errorNode = document.querySelector('#auth-error');
+  if (accountMode === 'signup' && form.get('password') !== form.get('confirmPassword')) { if (errorNode) errorNode.textContent = 'Those passwords don’t match. Check both fields and try again.'; return; }
   button.disabled = true; button.textContent = 'Working…';
   try {
-    const response = await api(`/api/auth/${accountMode === 'signup' ? 'signup' : 'login'}`, { method: 'POST', body: JSON.stringify({ email: form.get('email'), password: form.get('password') }) });
-    currentUser = response.user; savedCarpools = []; refreshAccountContent(); await refreshSavedCarpools(); showToast(`Signed in as ${currentUser.email}`);
+    const signingUp = accountMode === 'signup';
+    const response = await api(`/api/auth/${signingUp ? 'signup' : 'login'}`, { method: 'POST', body: JSON.stringify({ email: String(form.get('email')).trim(), password: form.get('password') }) });
+    currentUser = response.user; accountJustCreated = signingUp; accountPanel = 'account'; accountMode = 'login'; savedCarpools = [];
+    try { await loadMeetupSettings(); } catch (error) { showToast(`Signed in, but settings could not load: ${error.message}`); }
+    refreshAccountModal(); await refreshSavedCarpools(); showToast(signingUp ? 'Your account is ready.' : `Signed in as ${currentUser.email}`);
   } catch (error) { const node = document.querySelector('#auth-error'); if (node) node.textContent = error.message; button.disabled = false; button.textContent = accountMode === 'login' ? 'Sign in →' : 'Create account →'; }
 }
 
 async function handleAccountClick(event) {
   const button = event.target.closest('[data-account-action]'); if (!button) return;
   const action = button.dataset.accountAction;
-  if (action === 'mode-login' || action === 'mode-signup') { accountMode = action === 'mode-login' ? 'login' : 'signup'; refreshAccountContent(); return; }
+  if (action === 'panel-account' || action === 'panel-settings') {
+    accountPanel = action === 'panel-account' ? 'account' : 'settings';
+    if (accountPanel === 'settings' && currentUser) await loadMeetupSettings().catch((error) => showToast(error.message));
+    refreshAccountModal(); return;
+  }
+  if (action === 'mode-login' || action === 'mode-signup') { accountMode = action === 'mode-login' ? 'login' : 'signup'; refreshAccountModal(); return; }
   if (action === 'logout') {
     try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); } catch {}
-    currentUser = null; savedCarpools = []; closeAccount(); render(); showToast('You’re signed out. This session won’t be saved.'); return;
+    currentUser = null; accountJustCreated = false; accountPanel = 'account'; accountMode = 'login'; savedCarpools = []; meetupFilters = { excludedCategories: ['childSchools'], excludedTerms: [] }; closeAccount(); render(); showToast('You’re signed out. This session won’t be saved.'); return;
+  }
+  if (action === 'save-settings') {
+    if (!currentUser) { refreshAccountContent(); showToast('Filters apply for this session only. Sign in to save them.'); return; }
+    try { const response = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ settings: meetupFilters }) }); meetupFilters = response.settings; showToast('Meetup filters saved to your account.'); }
+    catch (error) { showToast(error.message); }
+    return;
   }
   const id = Number(button.dataset.trip);
   if (action === 'delete' && id) {
@@ -175,14 +245,27 @@ async function handleAccountClick(event) {
   }
 }
 
+function handleSettingsChange(event) {
+  const key = event.target.dataset.filterCategory;
+  if (!key || event.target.disabled) return;
+  const values = new Set(meetupFilters.excludedCategories);
+  if (event.target.checked) values.add(key); else values.delete(key);
+  values.add('childSchools');
+  meetupFilters.excludedCategories = [...values];
+}
+
+function handleSettingsInput(event) {
+  if (event.target.id !== 'filter-terms') return;
+  meetupFilters.excludedTerms = [...new Set(event.target.value.split(',').map((term) => term.trim().toLowerCase()).filter(Boolean))].slice(0, 20);
+}
+
 async function saveCurrentCarpool() {
   if (!currentUser) { accountMode = 'login'; openAccount(); showToast('Sign in to save this carpool.'); return; }
   if (!result?.riders?.length || !result.spot) return;
-  const name = prompt('Name this carpool', `${result.spot.name} · ${new Date().toLocaleDateString()}`);
-  if (name === null) return;
   try {
     const cleanResult = { center: result.center, spots: result.spots, spot: result.spot, spotIndex: result.spotIndex, unavailable: result.unavailable, message: result.message, riders: result.riders.map((rider) => ({ point: { address: rider.point.address, coords: rider.point.coords } })) };
-    await api('/api/carpools', { method: 'POST', body: JSON.stringify({ name, payload: { riders: result.riders.map((rider) => ({ address: rider.point.address, coords: rider.point.coords })), result: cleanResult } }) });
+    const date = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date());
+    await api('/api/carpools', { method: 'POST', body: JSON.stringify({ name: `${result.spot.name} · ${date}`, payload: { riders: result.riders.map((rider) => ({ address: rider.point.address, coords: rider.point.coords })), result: cleanResult } }) });
     await refreshSavedCarpools(); showToast('Carpool saved to your account.');
   } catch (error) { showToast(error.message); }
 }
@@ -577,7 +660,7 @@ async function findMeetup() {
 async function findPublicPlace(center) {
   // Photon /reverse rejects countrycode. Keep the search close to the midpoint.
   const params = new URLSearchParams({ lat: String(center[0]), lon: String(center[1]), radius: '10', limit: '30', lang: 'en' });
-  ['amenity:library', 'amenity:college', 'amenity:university', 'amenity:school', 'leisure:park'].forEach((tag) => params.append('osm_tag', tag));
+  ['amenity:library', 'amenity:college', 'amenity:university', 'amenity:school', 'leisure:park', 'leisure:pitch'].forEach((tag) => params.append('osm_tag', tag));
   // Nearby-place lookup is best-effort. If the provider is offline or lists no
   // venue nearby, still return a usable map pin at the computed group center.
   const data = await photonRequest('/reverse', params, new AbortController().signal, { fallbackWhenEmpty: true }).catch(() => null);
@@ -585,19 +668,30 @@ async function findPublicPlace(center) {
   const places = (data.features || []).map((feature) => {
     const p = feature.properties || {}; const coords = [feature.geometry?.coordinates?.[1], feature.geometry?.coordinates?.[0]];
     if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1]) || !p.countrycode) return null;
-    const isHighSchool = p.osm_key === 'amenity' && p.osm_value === 'school' && /\b(high school|secondary school|senior high|lycee|liceo)\b/i.test(p.name || '');
+    const isSchool = p.osm_key === 'amenity' && p.osm_value === 'school';
+    const isChildSchool = isSchool && /\b(preschool|pre-school|nursery|kindergarten|elementary|primary school)\b/i.test(p.name || '');
+    const isHighSchool = isSchool && /\b(high school|secondary school|senior high|lycee|liceo)\b/i.test(p.name || '');
+    const isSoccerField = p.osm_key === 'leisure' && p.osm_value === 'pitch' && (/^(soccer|football)$/i.test(String(p.sport || '')) || /\b(soccer|football) (field|pitch)\b/i.test(p.name || ''));
+    if (isChildSchool) return null;
     const type = p.osm_key === 'amenity' && p.osm_value === 'library' ? 'PUBLIC LIBRARY'
       : p.osm_key === 'amenity' && p.osm_value === 'college' ? 'COLLEGE'
         : p.osm_key === 'amenity' && p.osm_value === 'university' ? 'UNIVERSITY'
           : isHighSchool ? 'HIGH SCHOOL'
+          : isSoccerField ? 'SOCCER / FOOTBALL FIELD'
             : p.osm_key === 'leisure' && p.osm_value === 'park' ? 'PUBLIC PARK' : null;
     if (!type) return null;
     const title = [p.name, p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street].filter(Boolean).join(' · ') || type.replace('PUBLIC ', '');
     const address = [p.street, p.city, p.state, p.country].filter(Boolean).join(', ') || `${(distanceKm(center, coords) * 1000).toFixed(0)} m from your group’s center`;
+    const category = type === 'PUBLIC LIBRARY' ? 'libraries' : ['COLLEGE', 'UNIVERSITY'].includes(type) ? 'colleges' : type === 'HIGH SCHOOL' ? 'highSchools' : type === 'PUBLIC PARK' ? 'parks' : type === 'SOCCER / FOOTBALL FIELD' ? 'soccerFields' : '';
+    if (isMeetupExcluded(category, `${title} ${type} ${address}`)) return null;
     return { name: title, type, address, coords, distance: distanceKm(center, coords), countrycode: p.countrycode };
   }).filter(Boolean).sort((a, b) => a.distance - b.distance);
   if (places.length) return places.slice(0, 12);
-  return [centerPoint(center, 'No nearby public venue was listed. Use this map pin as your meetup point, or open the map to choose a public place nearby.')];
+  return [centerPoint(center, 'No nearby venue matched your filters. Adjust Meetup settings or use this central map pin.')];
+}
+
+function isMeetupExcluded(category, searchText) {
+  return shouldExcludeMeetup(meetupFilters, category, searchText);
 }
 
 function centerPoint(center, message) {
@@ -658,4 +752,4 @@ function observeSections() {
 
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAccount(); });
 render();
-api('/api/auth/me').then(({ user }) => { currentUser = user; render(); }).catch(() => {});
+api('/api/auth/me').then(async ({ user }) => { currentUser = user; await loadMeetupSettings().catch(() => {}); render(); }).catch(() => {});
