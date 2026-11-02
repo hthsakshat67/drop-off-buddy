@@ -16,10 +16,10 @@ const US_STATE_NAMES = {
   Alabama:'AL', Alaska:'AK', Arizona:'AZ', Arkansas:'AR', California:'CA', Colorado:'CO', Connecticut:'CT', Delaware:'DE', Florida:'FL', Georgia:'GA', Hawaii:'HI', Idaho:'ID', Illinois:'IL', Indiana:'IN', Iowa:'IA', Kansas:'KS', Kentucky:'KY', Louisiana:'LA', Maine:'ME', Maryland:'MD', Massachusetts:'MA', Michigan:'MI', Minnesota:'MN', Mississippi:'MS', Missouri:'MO', Montana:'MT', Nebraska:'NE', Nevada:'NV', 'New Hampshire':'NH', 'New Jersey':'NJ', 'New Mexico':'NM', 'New York':'NY', 'North Carolina':'NC', 'North Dakota':'ND', Ohio:'OH', Oklahoma:'OK', Oregon:'OR', Pennsylvania:'PA', 'Rhode Island':'RI', 'South Carolina':'SC', 'South Dakota':'SD', Tennessee:'TN', Texas:'TX', Utah:'UT', Vermont:'VT', Virginia:'VA', Washington:'WA', 'West Virginia':'WV', Wisconsin:'WI', Wyoming:'WY', 'District of Columbia':'DC',
 };
 
-async function photonRequest(path, params, signal) {
+async function photonRequest(path, params, signal, { fallbackWhenEmpty = false, publicOnly = false } = {}) {
   const configured = import.meta.env.VITE_PHOTON_URL?.replace(/\/$/, '');
   const localPage = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-  const bases = configured ? [configured, PUBLIC_PHOTON] : localPage ? [LOCAL_PHOTON, PUBLIC_PHOTON] : [PUBLIC_PHOTON];
+  const bases = publicOnly ? [PUBLIC_PHOTON] : configured ? [configured, PUBLIC_PHOTON] : localPage ? [LOCAL_PHOTON, PUBLIC_PHOTON] : [PUBLIC_PHOTON];
   let lastError;
   for (const base of [...new Set(bases)]) {
     const url = new URL(path, `${base}/`);
@@ -29,7 +29,9 @@ async function photonRequest(path, params, signal) {
       const timeout = AbortSignal.timeout(local ? 5000 : 18000);
       const response = await fetch(url, { signal: AbortSignal.any([signal, timeout]) });
       if (!response.ok) throw new Error(`Photon returned ${response.status}.`);
-      return await response.json();
+      const data = await response.json();
+      if (fallbackWhenEmpty && !data.features?.length && base !== bases.at(-1)) continue;
+      return data;
     } catch (error) {
       if (signal?.aborted || error.name === 'AbortError') throw error;
       lastError = error;
@@ -53,16 +55,16 @@ function render() {
       <header class="topbar" id="top"><a class="wordmark" href="#top" aria-label="Drop-Off Buddy home"><span>DROP-OFF<br><b>BUDDY</b></span></a><a class="top-cta" href="#planner">PLAN A PICKUP <span>↓</span></a></header>
       <main>
         <section class="hero" data-reveal><div class="hero-copy"><p class="eyebrow">CARPOOL PICKUPS, FIGURED OUT</p><h1>Meet in the<br><strong>middle of it all.</strong></h1><p class="hero-text">Add your crew’s addresses. Get the fairest central point and a nearby public place to meet.</p><a class="hero-link" href="#planner">Find your meetup <b>↓</b></a></div><div class="hero-art"><img src="/drop-off-buddy-art.png" alt="Drop-Off Buddy — a carpool crew heading out together"/><span class="art-caption">LESS DRIVING. MORE TEAM TIME.</span></div></section>
-        <section class="planner" id="planner" data-reveal><div class="planner-head"><div><p class="eyebrow"><span></span> YOUR CARPOOL</p><h2>Where’s everyone starting?</h2><p class="planner-hint">Search a numbered street address, road, or school anywhere in the U.S. Choose the exact match or use your location.</p></div><div class="rider-count"><b id="rider-count">${riders.length}</b><span> / ${MAX_RIDERS} riders</span></div></div>
+        <section class="planner" id="planner" data-reveal><div class="planner-head"><div><p class="eyebrow"><span></span> YOUR CARPOOL</p><h2>Where’s everyone starting?</h2><p class="planner-hint">Search addresses and places worldwide. Keep everyone within 250 km; choose a suggestion or use your location.</p></div><div class="rider-count"><b id="rider-count">${riders.length}</b><span> / ${MAX_RIDERS} riders</span></div></div>
           <div class="riders" id="riders">${riders.map(riderMarkup).join('')}</div>
         <div class="form-controls"><div class="rider-actions"><button class="add-button" id="add-rider" ${riders.length >= MAX_RIDERS ? 'disabled' : ''}><span>＋</span> Add rider</button><button class="location-button" id="use-location" ${riders.length >= MAX_RIDERS ? 'disabled' : ''}>⌖ Use my location</button></div><button class="find-button" id="find-meetup" disabled><span>Find meetup</span><b>→</b></button></div>
-      <p class="privacy"><span>⌖</span> U.S.-only address search via Photon and Census; GPS is opt-in.</p>
+      <p class="privacy"><span>⌖</span> No login; plans aren’t saved. Search text goes to map providers; location is used only when you opt in.</p>
           <p class="error-message" id="error-message" role="alert"></p>
         </section>
         <section class="map-section" data-reveal><div class="map-heading"><div><p class="eyebrow"><span></span> THE MEETUP MAP</p><h2 id="map-title">Your crew, on one map.</h2></div><button id="reset-map" class="reset-map" hidden>RESET VIEW ↗</button></div><div class="map-frame"><div id="map" aria-label="Interactive map of rider locations and the suggested meetup point"></div><div class="map-empty" id="map-empty"><span class="map-empty-mark">⌖</span><p>Pick rider addresses to see them here.</p></div></div><div class="map-legend"><span><i class="home-dot"></i> RIDER HOME</span><span><i class="meet-dot"></i> MEETUP</span><small>© OpenStreetMap contributors</small></div></section>
         <section class="result" id="result" aria-live="polite"></section>
-        <section class="how" data-reveal><div class="how-title"><p class="eyebrow">QUICK &amp; EASY</p><h2>Three steps.<br><strong>One less group chat.</strong></h2></div><div class="how-steps"><article><b>01</b><h3>Add addresses</h3><p>Type part of an address or a school and choose a matching suggestion.</p></article><article><b>02</b><h3>Find the middle</h3><p>We average everyone’s coordinates and find a nearby library, school, or park.</p></article><article><b>03</b><h3>Share the plan</h3><p>Send the meetup and directions to your team in one tap.</p></article></div></section>
-      </main><footer><a class="wordmark footer-mark" href="#top"><span>DROP-OFF <b>BUDDY</b></span></a><span>Made for getting there together.</span><span>FREE · OPEN MAP DATA</span></footer>
+        <section class="how" data-reveal><div class="how-title"><p class="eyebrow">QUICK &amp; EASY</p><h2>Three steps.<br><strong>One less group chat.</strong></h2></div><div class="how-steps"><article><b>01</b><h3>Add addresses</h3><p>Search places worldwide and choose a matching suggestion.</p></article><article><b>02</b><h3>Find the middle</h3><p>We calculate the center and find nearby parks, libraries, colleges, or universities.</p></article><article><b>03</b><h3>Pick &amp; share</h3><p>Compare a second meetup option, then send directions to your team.</p></article></div></section>
+      </main><footer><a class="wordmark footer-mark" href="#top"><span>DROP-OFF <b>BUDDY</b></span></a><span>Made for getting there together.</span><span class="footer-contact"><a href="mailto:akshatchakrabartiac@gmail.com">Contact us · akshatchakrabartiac@gmail.com</a></span></footer>
     </div>`;
   bindEvents();
   initializeMap();
@@ -132,13 +134,13 @@ function useCurrentLocation() {
     try {
       const params = new URLSearchParams({ lat: String(coords[0]), lon: String(coords[1]), limit: '1' });
       const nearby = await photonRequest('/reverse', params, new AbortController().signal);
-      if (!nearby.features?.some((feature) => String(feature.properties?.countrycode || '').toLowerCase() === 'us')) {
-        setError('Current location is outside the United States. Choose a U.S. address instead.');
+      if (!nearby.features?.length) {
+        setError('Could not determine the country for your location. Search for a place instead.');
         if (button) { button.disabled = false; button.innerHTML = '⌖ Use my location'; }
         return;
       }
     } catch {
-      setError('Could not confirm this location is in the United States. Enter a U.S. address instead.');
+      setError('Could not confirm this location. Check your connection or search for a place instead.');
       if (button) { button.disabled = false; button.innerHTML = '⌖ Use my location'; }
       return;
     }
@@ -186,6 +188,7 @@ async function searchAddress(id, suggest = false) {
     if (token !== rider.searchToken) return;
     let features = data.features || [];
     let matches = makeAddressMatches(features, rider.address);
+    const requestedNumber = rider.address.match(/^\s*(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s+/)?.[1];
     // Retry a street/city/state query in structured form when free-text
     // search has no usable matches. House numbers are not required.
     const structured = structuredAddress(rider.address);
@@ -196,9 +199,16 @@ async function searchAddress(id, suggest = false) {
       features = [...features, ...(precise.features || [])];
       matches = makeAddressMatches(features, rider.address);
     }
-    const requestedNumber = rider.address.match(/^\s*(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s+/)?.[1];
+    const localPage = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const missingRequestedHouse = requestedNumber && !matches.some((match) => match.houseNumber && sameHouseNumber(match.houseNumber, requestedNumber));
+    if (localPage && (!matches.length || missingRequestedHouse)) {
+      const publicData = await photonSearch(rider.address, controller.signal, true).catch(() => ({ features: [] }));
+      if (token !== rider.searchToken) return;
+      features = [...features, ...(publicData.features || [])];
+      matches = makeAddressMatches(features, rider.address);
+    }
     const exactPhotonAddress = requestedNumber && matches.some((match) => match.houseNumber && sameHouseNumber(match.houseNumber, requestedNumber));
-    if (requestedNumber && !exactPhotonAddress && (!suggest || isLikelyUsAddress(rider.address))) {
+    if (requestedNumber && !exactPhotonAddress && isLikelyUsAddress(rider.address)) {
       if (!suggest) setError('Checking the U.S. Census address ranges…');
       const censusMatch = await censusAddressSearch(rider.address, controller.signal).catch(() => null);
       if (token !== rider.searchToken) return;
@@ -208,11 +218,11 @@ async function searchAddress(id, suggest = false) {
     renderSuggestions(rider);
     if (!suggest) setError('');
     if (!rider.matches.length && !suggest) setError(features.length
-      ? `No matching U.S. street or school found for “${rider.address}”. Try adding the town and state.`
+      ? `No matching address, road, or place found for “${rider.address}”. Try adding the city, region, or postal code.`
       : `No match found for “${rider.address}”. Check the spelling and add the town and region.`);
   } catch (error) {
     if (error.name !== 'AbortError' && token === rider.searchToken && !suggest) {
-      const hasHouseNumber = /^\s*\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?\s+/.test(rider.address);
+      const hasHouseNumber = /^\s*\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?\s+/.test(rider.address) && isLikelyUsAddress(rider.address);
       const censusMatch = hasHouseNumber ? await censusAddressSearch(rider.address, controller.signal).catch(() => null) : null;
       if (token !== rider.searchToken) return;
       if (censusMatch) {
@@ -293,10 +303,10 @@ async function censusAddressSearch(query, signal) {
   return { title, detail, full: title, coords, houseNumber: requestedNumber, streetName: a?.streetName || '', type: 'CENSUS ADDRESS', placeType: 'Approximate address-range location' };
 }
 
-async function photonSearch(query, signal) {
+async function photonSearch(query, signal, publicOnly = false) {
   // Keep search within the United States at the source. Default Photon layers
   // include homes, streets, towns, and named public places.
-  const params = new URLSearchParams({ q: query, limit: '50', lang: 'en', countrycode: 'us' });
+  const params = new URLSearchParams({ q: query, limit: '50', lang: 'en' });
   ['house', 'street', 'other'].forEach((layer) => params.append('layer', layer));
   const anchors = riders.filter((rider) => rider.point).map((rider) => rider.point.coords);
   if (anchors.length) {
@@ -304,7 +314,7 @@ async function photonSearch(query, signal) {
     params.set('lat', String(lat)); params.set('lon', String(lon));
     params.set('zoom', '5'); params.set('location_bias_scale', '0.2');
   }
-  return photonRequest('/api', params, signal);
+  return photonRequest('/api', params, signal, { fallbackWhenEmpty: true, publicOnly });
 }
 
 function structuredAddress(query) {
@@ -335,18 +345,18 @@ function structuredAddress(query) {
   const street = tokens.slice(streetStart, streetEnd).join(' ');
   const city = tokens.slice(streetEnd).join(' ');
   if (!street || !city) return null;
-  return Object.fromEntries(Object.entries({ housenumber: number, street, city, state, postcode, countrycode: 'us' }).filter(([, value]) => value));
+  return Object.fromEntries(Object.entries({ housenumber: number, street, city, state, postcode }).filter(([, value]) => value));
 }
 
 async function photonStructuredSearch(address, signal) {
-  const params = new URLSearchParams({ ...address, limit: '50', lang: 'en', countrycode: 'us' });
+  const params = new URLSearchParams({ ...address, limit: '50', lang: 'en' });
   const anchors = riders.filter((rider) => rider.point).map((rider) => rider.point.coords);
   if (anchors.length) {
     const [lat, lon] = meanCenter(anchors);
     params.set('lat', String(lat)); params.set('lon', String(lon));
     params.set('zoom', '5'); params.set('location_bias_scale', '0.2');
   }
-  try { return await photonRequest('/structured', params, signal); }
+  try { return await photonRequest('/structured', params, signal, { fallbackWhenEmpty: true }); }
   catch { return { features: [] }; }
 }
 
@@ -358,11 +368,12 @@ function makeAddressMatches(features, query) {
   const requestedState = parsed?.state;
   return features.map((feature) => {
       const p = feature.properties || {}; const c = feature.geometry?.coordinates;
-      if (!c || c.length < 2 || String(p.countrycode || '').toLowerCase() !== 'us') return null;
+      if (!c || c.length < 2 || !p.countrycode) return null;
       const resultState = Object.entries(US_STATE_NAMES).find(([name, code]) => name.toLowerCase() === String(p.state || '').toLowerCase() || code.toLowerCase() === String(p.state || '').toLowerCase())?.[1];
       if (requestedState && resultState && requestedState !== resultState) return null;
       if (requestedZip && p.postcode && requestedZip !== p.postcode) return null;
-      const namedInstitution = p.osm_key === 'amenity' && ['school', 'college', 'university'].includes(p.osm_value) && p.name;
+      const isExcludedChildSchool = p.osm_key === 'amenity' && p.osm_value === 'school' && /\b(preschool|pre-school|nursery|kindergarten|elementary|primary school)\b/i.test(p.name || '');
+      const namedInstitution = !isExcludedChildSchool && p.osm_key === 'amenity' && ['school', 'college', 'university'].includes(p.osm_value) && p.name;
       const namedRoad = p.name && (p.osm_key === 'highway' || ['street', 'road'].includes(String(p.type || '').toLowerCase()));
       if (!namedInstitution && !namedRoad && (!p.housenumber || !(p.street || p.name))) return null;
       const title = namedInstitution || namedRoad ? p.name : `${p.housenumber} ${p.street || p.name}`;
@@ -395,7 +406,7 @@ function selectAddress(id, choiceIndex) {
   setError(''); renderRiders(); updateFindButton(); renderMarkers();
 }
 
-const MAX_GROUP_DISTANCE_KM = 100;
+const MAX_GROUP_DISTANCE_KM = 250;
 
 function renderRiders() {
   const container = document.querySelector('#riders'); if (!container) return;
@@ -472,8 +483,8 @@ async function findMeetup() {
   button.disabled = true; button.innerHTML = '<span>Finding the best meetup…</span><b class="spinner">◌</b>'; setError('');
   const center = meanCenter(ready.map((rider) => rider.point.coords));
   try {
-    const spot = await findPublicPlace(center);
-    result = { center, spot, riders: ready, unavailable: Boolean(spot.fallback), message: spot.message };
+    const spots = await findPublicPlace(center);
+    result = { center, spots, spot: spots[0], spotIndex: 0, riders: ready, unavailable: Boolean(spots[0].fallback), message: spots[0].message };
     showResult(result, true); renderMarkers();
   } catch (error) {
     const mapUrl = `https://www.google.com/maps/search/?api=1&query=${center[0]},${center[1]}`;
@@ -483,25 +494,29 @@ async function findMeetup() {
 }
 
 async function findPublicPlace(center) {
-  // Photon /reverse rejects countrycode (that filter is supported on /api).
-  // Query within a bounded radius, then enforce U.S. membership on results.
+  // Photon /reverse rejects countrycode. Keep the search close to the midpoint.
   const params = new URLSearchParams({ lat: String(center[0]), lon: String(center[1]), radius: '10', limit: '30', lang: 'en' });
-  ['amenity:library', 'amenity:school', 'leisure:park'].forEach((tag) => params.append('osm_tag', tag));
+  ['amenity:library', 'amenity:college', 'amenity:university', 'amenity:school', 'leisure:park'].forEach((tag) => params.append('osm_tag', tag));
   // Nearby-place lookup is best-effort. If the provider is offline or lists no
   // venue nearby, still return a usable map pin at the computed group center.
-  const data = await photonRequest('/reverse', params, new AbortController().signal).catch(() => null);
+  const data = await photonRequest('/reverse', params, new AbortController().signal, { fallbackWhenEmpty: true }).catch(() => null);
   if (!data) return centerPoint(center, 'Nearby public places could not be loaded right now. Use this map pin as your meetup point.');
   const places = (data.features || []).map((feature) => {
     const p = feature.properties || {}; const coords = [feature.geometry?.coordinates?.[1], feature.geometry?.coordinates?.[0]];
-    if (!coords[0] || String(p.countrycode || '').toLowerCase() !== 'us') return null;
-    const type = p.osm_key === 'amenity' && p.osm_value === 'library' ? 'PUBLIC LIBRARY' : p.osm_key === 'amenity' && p.osm_value === 'school' ? 'SCHOOL' : p.osm_key === 'leisure' && p.osm_value === 'park' ? 'PUBLIC PARK' : null;
+    if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1]) || !p.countrycode) return null;
+    const isHighSchool = p.osm_key === 'amenity' && p.osm_value === 'school' && /\b(high school|secondary school|senior high|lycee|liceo)\b/i.test(p.name || '');
+    const type = p.osm_key === 'amenity' && p.osm_value === 'library' ? 'PUBLIC LIBRARY'
+      : p.osm_key === 'amenity' && p.osm_value === 'college' ? 'COLLEGE'
+        : p.osm_key === 'amenity' && p.osm_value === 'university' ? 'UNIVERSITY'
+          : isHighSchool ? 'HIGH SCHOOL'
+            : p.osm_key === 'leisure' && p.osm_value === 'park' ? 'PUBLIC PARK' : null;
     if (!type) return null;
     const title = [p.name, p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street].filter(Boolean).join(' · ') || type.replace('PUBLIC ', '');
-    const address = [p.street, p.city, p.state].filter(Boolean).join(', ') || `${(distanceKm(center, coords) * 1000).toFixed(0)} m from your group’s center`;
-    return { name: title, type, address, coords, distance: distanceKm(center, coords) };
+    const address = [p.street, p.city, p.state, p.country].filter(Boolean).join(', ') || `${(distanceKm(center, coords) * 1000).toFixed(0)} m from your group’s center`;
+    return { name: title, type, address, coords, distance: distanceKm(center, coords), countrycode: p.countrycode };
   }).filter(Boolean).sort((a, b) => a.distance - b.distance);
-  if (places.length) return places[0];
-  return centerPoint(center, 'No nearby public venue was listed. Use this map pin as your meetup point, or open the map to choose a public place nearby.');
+  if (places.length) return places.slice(0, 12);
+  return [centerPoint(center, 'No nearby public venue was listed. Use this map pin as your meetup point, or open the map to choose a public place nearby.')];
 }
 
 function centerPoint(center, message) {
@@ -516,14 +531,24 @@ function centerPoint(center, message) {
 }
 
 function showResult(data, scroll, mapUrlOverride) {
-  const { spot, riders: group, center, unavailable, message } = data;
+  const { spot, spots = [data.spot], spotIndex = 0, riders: group, center, unavailable, message } = data;
   const mapUrl = mapUrlOverride || (unavailable
     ? `https://www.google.com/maps/search/?api=1&query=${center[0]},${center[1]}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${spot.name} ${spot.address}`)}`);
   const km = distanceKm(center, spot.coords);
   document.querySelector('#map-title').textContent = unavailable ? 'Your central meetup pin is ready.' : 'Your meetup is ready.';
-  document.querySelector('#result').innerHTML = `<article class="result-card ${unavailable ? 'result-warning' : ''}"><div class="result-label"><span>${unavailable ? 'CENTROID · CHECK A PUBLIC VENUE' : `MEETUP FOR ${group.length} RIDERS`}</span><span>${unavailable ? 'MAP DATA LIMIT' : `${(km * 1000).toFixed(0)} M FROM CENTER`}</span></div><div class="result-main"><span class="result-icon">${unavailable ? '⌖' : '✦'}</span><div class="result-name"><small>${esc(spot.type)}</small><h2>${esc(spot.name)}</h2><p>${esc(spot.address)}</p></div></div>${unavailable ? `<p class="result-message">${esc(message)}</p>` : ''}<div class="result-footer"><span>STRAIGHT-LINE CENTER · PUBLIC MAP DATA</span><div><a href="${mapUrl}" target="_blank" rel="noreferrer" class="directions">OPEN DIRECTIONS <b>↗</b></a><button class="share" id="share">SHARE PICKUP <b>↑</b></button></div></div></article>`;
+  const distanceLabel = km < 1 ? `${Math.round(km * 1000)} M FROM CENTER` : `${km.toFixed(1)} KM FROM CENTER`;
+  const alternate = spots.length > 1 && !unavailable ? `<button class="alternate-meetup" id="alternate-meetup" type="button">${spotIndex === 0 ? 'Want another option? Show a second nearby meetup ↗' : '← Back to the closest meetup'}</button>` : '';
+  document.querySelector('#result').innerHTML = `<article class="result-card ${unavailable ? 'result-warning' : ''}"><div class="result-label"><span>${unavailable ? 'CENTROID · CHECK A PUBLIC VENUE' : `MEETUP FOR ${group.length} RIDERS`}</span><span>${unavailable ? 'MAP DATA LIMIT' : distanceLabel}</span></div><div class="result-main"><span class="result-icon">${unavailable ? '⌖' : '✦'}</span><div class="result-name"><small>${esc(spot.type)}</small><h2>${esc(spot.name)}</h2><p>${esc(spot.address)}</p></div></div>${unavailable ? `<p class="result-message">${esc(message)}</p>` : ''}${alternate}<div class="result-footer"><span>STRAIGHT-LINE CENTER · PUBLIC MAP DATA</span><div><a href="${mapUrl}" target="_blank" rel="noreferrer" class="directions">OPEN DIRECTIONS <b>↗</b></a><button class="share" id="share">SHARE PICKUP <b>↑</b></button></div></div></article>`;
   document.querySelector('#share').addEventListener('click', () => share(data));
+  document.querySelector('#alternate-meetup')?.addEventListener('click', () => {
+    data.spotIndex = spotIndex === 0 ? 1 : 0;
+    data.spot = spots[data.spotIndex];
+    data.unavailable = Boolean(data.spot.fallback);
+    data.message = data.spot.message;
+    showResult(data, false);
+    renderMarkers();
+  });
   document.querySelector('#result').classList.add('show');
   if (scroll) document.querySelector('#result').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
