@@ -4,11 +4,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 4178 --strictPort",
+    "dev": "node scripts/dev.mjs",
     "setup:photon-us": "node scripts/setup-photon.mjs",
     "photon": "node scripts/start-photon.mjs",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/auth-server.mjs",
+    "test": "node server/auth-server.test.mjs"
   },
   "devDependencies": {
     "vite": "^6.1.0"

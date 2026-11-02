@@ -8,6 +8,9 @@ let nextId = 1;
 let map;
 let markers = [];
 let result = null;
+let currentUser = null;
+let savedCarpools = [];
+let accountMode = 'login';
 const MAX_RIDERS = 10;
 let censusRequestId = 0;
 const PUBLIC_PHOTON = 'https://photon.komoot.io';
@@ -52,19 +55,21 @@ addRider(); addRider();
 function render() {
   app.innerHTML = `
     <div class="page">
-      <header class="topbar" id="top"><a class="wordmark" href="#top" aria-label="Drop-Off Buddy home"><span>DROP-OFF<br><b>BUDDY</b></span></a><a class="top-cta" href="#planner">PLAN A PICKUP <span>↓</span></a></header>
+      <header class="topbar" id="top"><a class="wordmark" href="#top" aria-label="Drop-Off Buddy home"><span>DROP-OFF<br><b>BUDDY</b></span></a><div class="nav-actions"><button class="account-trigger" id="account-trigger">${currentUser ? `☻ ${esc(currentUser.email)}` : 'SIGN IN'} <span>↗</span></button><a class="top-cta" href="#planner">PLAN A PICKUP <span>↓</span></a></div></header>
       <main>
-        <section class="hero" data-reveal><div class="hero-copy"><p class="eyebrow">CARPOOL PICKUPS, FIGURED OUT</p><h1>Meet in the<br><strong>middle of it all.</strong></h1><p class="hero-text">Add your crew’s addresses. Get the fairest central point and a nearby public place to meet.</p><a class="hero-link" href="#planner">Find your meetup <b>↓</b></a></div><div class="hero-art"><img src="/drop-off-buddy-art.png" alt="Drop-Off Buddy — a carpool crew heading out together"/><span class="art-caption">LESS DRIVING. MORE TEAM TIME.</span></div></section>
+        <section class="hero" data-reveal><div class="hero-copy"><p class="eyebrow"><span></span> ONE CREW. ONE SMARTER MEETUP.</p><h1>Meet in the<br><strong>middle of it all.</strong></h1><p class="hero-text">Bring the group’s starting points together. Find a central meetup, compare a nearby option, and share directions in seconds.</p><a class="hero-link" href="#planner">Plan your carpool <b>↓</b></a><div class="hero-proof"><span>01 <b>UP TO 10 RIDERS</b></span><span>02 <b>250 KM GROUP LIMIT</b></span><span>03 <b>WORLDWIDE PLACE SEARCH</b></span></div></div><div class="hero-art"><img src="/drop-off-buddy-art.png" alt="Drop-Off Buddy — a carpool crew heading out together"/><span class="art-caption">LESS DRIVING. MORE TEAM TIME.</span><div class="art-sticker">✦<b>LET’S<br>ROLL</b></div></div></section>
+        <section class="world-strip" data-reveal><div><span class="world-symbol">◎</span><b>YOUR CREW, WHEREVER YOU ARE.</b><span>Search addresses and places across the globe.</span></div><div class="country-chips"><span>US</span><span>CA</span><span>MX</span><span>BR</span><span>UK</span><span>FR</span><span>DE</span><span>IN</span><span>JP</span><span>AU</span><span>ZA</span><span>+ WORLD</span></div></section>
         <section class="planner" id="planner" data-reveal><div class="planner-head"><div><p class="eyebrow"><span></span> YOUR CARPOOL</p><h2>Where’s everyone starting?</h2><p class="planner-hint">Search addresses and places worldwide. Keep everyone within 250 km; choose a suggestion or use your location.</p></div><div class="rider-count"><b id="rider-count">${riders.length}</b><span> / ${MAX_RIDERS} riders</span></div></div>
           <div class="riders" id="riders">${riders.map(riderMarkup).join('')}</div>
         <div class="form-controls"><div class="rider-actions"><button class="add-button" id="add-rider" ${riders.length >= MAX_RIDERS ? 'disabled' : ''}><span>＋</span> Add rider</button><button class="location-button" id="use-location" ${riders.length >= MAX_RIDERS ? 'disabled' : ''}>⌖ Use my location</button></div><button class="find-button" id="find-meetup" disabled><span>Find meetup</span><b>→</b></button></div>
-      <p class="privacy"><span>⌖</span> No login; plans aren’t saved. Search text goes to map providers; location is used only when you opt in.</p>
+      <p class="privacy"><span>⌖</span> No account? Nothing is saved. Sign in and choose “Save this carpool” to store your plan privately. Addresses are sent to OpenStreetMap-powered search; location is used only when you opt in.</p>
           <p class="error-message" id="error-message" role="alert"></p>
         </section>
         <section class="map-section" data-reveal><div class="map-heading"><div><p class="eyebrow"><span></span> THE MEETUP MAP</p><h2 id="map-title">Your crew, on one map.</h2></div><button id="reset-map" class="reset-map" hidden>RESET VIEW ↗</button></div><div class="map-frame"><div id="map" aria-label="Interactive map of rider locations and the suggested meetup point"></div><div class="map-empty" id="map-empty"><span class="map-empty-mark">⌖</span><p>Pick rider addresses to see them here.</p></div></div><div class="map-legend"><span><i class="home-dot"></i> RIDER HOME</span><span><i class="meet-dot"></i> MEETUP</span><small>© OpenStreetMap contributors</small></div></section>
         <section class="result" id="result" aria-live="polite"></section>
-        <section class="how" data-reveal><div class="how-title"><p class="eyebrow">QUICK &amp; EASY</p><h2>Three steps.<br><strong>One less group chat.</strong></h2></div><div class="how-steps"><article><b>01</b><h3>Add addresses</h3><p>Search places worldwide and choose a matching suggestion.</p></article><article><b>02</b><h3>Find the middle</h3><p>We calculate the center and find nearby parks, libraries, colleges, or universities.</p></article><article><b>03</b><h3>Pick &amp; share</h3><p>Compare a second meetup option, then send directions to your team.</p></article></div></section>
+        <section class="how" data-reveal><div class="how-title"><p class="eyebrow"><span></span> BUILT FOR THE WHOLE CREW</p><h2>Less coordinating.<br><strong>More getting there.</strong></h2></div><div class="how-steps"><article><b>01</b><h3>Bring everyone in</h3><p>Search worldwide for addresses, streets, and public places. Add up to 10 riders.</p></article><article><b>02</b><h3>Find a fair meetup</h3><p>Get a central point and nearby public venues. Keep the group within 250 km.</p></article><article><b>03</b><h3>Save &amp; send</h3><p>Save plans to your private account and share a map link with the team.</p></article></div></section>
       </main><footer><a class="wordmark footer-mark" href="#top"><span>DROP-OFF <b>BUDDY</b></span></a><span>Made for getting there together.</span><span class="footer-contact"><a href="mailto:akshatchakrabartiac@gmail.com">Contact us · akshatchakrabartiac@gmail.com</a></span></footer>
+      <div class="account-backdrop" id="account-backdrop" hidden><section class="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title"><button class="modal-close" id="account-close" aria-label="Close">×</button><p class="eyebrow"><span></span> YOUR CARPOOL, YOURS</p><h2 id="account-title">${currentUser ? 'Your account' : accountMode === 'login' ? 'Welcome back.' : 'Create your account.'}</h2><p class="account-intro">${currentUser ? `Signed in as ${esc(currentUser.email)}. Your saved trips are private to your account.` : 'Sign in to save and reopen your carpools on this device. Plans are never saved without your account.'}</p><div id="account-content">${accountContent()}</div></section></div>
     </div>`;
   bindEvents();
   initializeMap();
@@ -79,6 +84,11 @@ function riderMarkup(rider, index) {
 }
 
 function bindEvents() {
+  document.querySelector('#account-trigger').addEventListener('click', openAccount);
+  document.querySelector('#account-close').addEventListener('click', closeAccount);
+  document.querySelector('#account-backdrop').addEventListener('click', (event) => { if (event.target.id === 'account-backdrop') closeAccount(); });
+  document.querySelector('#account-content').addEventListener('click', handleAccountClick);
+  document.querySelector('#account-content').addEventListener('submit', handleAccountSubmit);
   document.querySelector('#add-rider').addEventListener('click', () => {
     if (riders.length >= MAX_RIDERS) return;
     result = null;
@@ -110,6 +120,78 @@ function bindEvents() {
   });
   document.querySelector('#find-meetup').addEventListener('click', findMeetup);
   document.querySelector('#reset-map').addEventListener('click', fitMap);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Request failed. Please try again.');
+  return data;
+}
+
+function accountContent() {
+  if (currentUser) return `<div class="saved-header"><b>SAVED CARPOOLS</b><button type="button" class="text-button" data-account-action="logout">Sign out</button></div><div class="saved-list">${savedCarpools.length ? savedCarpools.map((trip) => `<article class="saved-trip"><button class="saved-trip-open" data-account-action="load" data-trip="${trip.id}"><b>${esc(trip.name)}</b><small>${new Date(trip.created_at).toLocaleDateString()}</small></button><button class="saved-trip-delete" aria-label="Delete ${esc(trip.name)}" data-account-action="delete" data-trip="${trip.id}">×</button></article>`).join('') : '<p class="saved-empty">No saved carpools yet. Find a meetup, then tap “Save this carpool.”</p>'}</div><p class="account-footnote">Your saved addresses are private to your account. You can delete a carpool whenever you like.</p>`;
+  return `<div class="auth-tabs"><button type="button" data-account-action="mode-login" class="${accountMode === 'login' ? 'active' : ''}">Sign in</button><button type="button" data-account-action="mode-signup" class="${accountMode === 'signup' ? 'active' : ''}">Create account</button></div><form id="auth-form"><label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label><label>Password<input name="password" type="password" autocomplete="${accountMode === 'login' ? 'current-password' : 'new-password'}" minlength="${accountMode === 'signup' ? 12 : 1}" maxlength="128" required placeholder="${accountMode === 'signup' ? 'At least 12 characters' : 'Your password'}"></label><p class="auth-error" id="auth-error" role="alert"></p><button class="auth-submit" type="submit">${accountMode === 'login' ? 'Sign in' : 'Create account'} <b>→</b></button></form><p class="account-footnote">Passwords are securely hashed. Sessions use private, HTTP-only cookies. No saved plans are created until you choose to save.</p>`;
+}
+
+function openAccount() {
+  const backdrop = document.querySelector('#account-backdrop'); backdrop.hidden = false;
+  if (currentUser) refreshSavedCarpools();
+  else document.querySelector('#account-content input')?.focus();
+}
+function closeAccount() { const backdrop = document.querySelector('#account-backdrop'); if (backdrop) backdrop.hidden = true; }
+function refreshAccountContent() { const target = document.querySelector('#account-content'); if (target) target.innerHTML = accountContent(); }
+async function refreshSavedCarpools() {
+  try { savedCarpools = (await api('/api/carpools')).carpools; refreshAccountContent(); }
+  catch (error) { if (error.message.includes('Sign in')) { currentUser = null; savedCarpools = []; refreshAccountContent(); } }
+}
+
+async function handleAccountSubmit(event) {
+  if (event.target.id !== 'auth-form') return;
+  event.preventDefault();
+  const form = new FormData(event.target); const button = event.target.querySelector('.auth-submit');
+  button.disabled = true; button.textContent = 'Working…';
+  try {
+    const response = await api(`/api/auth/${accountMode === 'signup' ? 'signup' : 'login'}`, { method: 'POST', body: JSON.stringify({ email: form.get('email'), password: form.get('password') }) });
+    currentUser = response.user; savedCarpools = []; refreshAccountContent(); await refreshSavedCarpools(); showToast(`Signed in as ${currentUser.email}`);
+  } catch (error) { const node = document.querySelector('#auth-error'); if (node) node.textContent = error.message; button.disabled = false; button.textContent = accountMode === 'login' ? 'Sign in →' : 'Create account →'; }
+}
+
+async function handleAccountClick(event) {
+  const button = event.target.closest('[data-account-action]'); if (!button) return;
+  const action = button.dataset.accountAction;
+  if (action === 'mode-login' || action === 'mode-signup') { accountMode = action === 'mode-login' ? 'login' : 'signup'; refreshAccountContent(); return; }
+  if (action === 'logout') {
+    try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); } catch {}
+    currentUser = null; savedCarpools = []; closeAccount(); render(); showToast('You’re signed out. This session won’t be saved.'); return;
+  }
+  const id = Number(button.dataset.trip);
+  if (action === 'delete' && id) {
+    try { await api(`/api/carpools/${id}`, { method: 'DELETE', body: '{}' }); await refreshSavedCarpools(); showToast('Saved carpool deleted.'); } catch (error) { showToast(error.message); }
+  }
+  if (action === 'load' && id) {
+    try { const saved = await api(`/api/carpools/${id}`); loadSavedCarpool(saved.payload); closeAccount(); document.querySelector('#planner').scrollIntoView({ behavior: 'smooth' }); showToast('Saved carpool opened.'); }
+    catch (error) { showToast(error.message); }
+  }
+}
+
+async function saveCurrentCarpool() {
+  if (!currentUser) { accountMode = 'login'; openAccount(); showToast('Sign in to save this carpool.'); return; }
+  if (!result?.riders?.length || !result.spot) return;
+  const name = prompt('Name this carpool', `${result.spot.name} · ${new Date().toLocaleDateString()}`);
+  if (name === null) return;
+  try {
+    const cleanResult = { center: result.center, spots: result.spots, spot: result.spot, spotIndex: result.spotIndex, unavailable: result.unavailable, message: result.message, riders: result.riders.map((rider) => ({ point: { address: rider.point.address, coords: rider.point.coords } })) };
+    await api('/api/carpools', { method: 'POST', body: JSON.stringify({ name, payload: { riders: result.riders.map((rider) => ({ address: rider.point.address, coords: rider.point.coords })), result: cleanResult } }) });
+    await refreshSavedCarpools(); showToast('Carpool saved to your account.');
+  } catch (error) { showToast(error.message); }
+}
+
+function loadSavedCarpool(payload) {
+  riders.forEach((rider) => { clearTimeout(rider.searchTimer); rider.searchController?.abort(); });
+  riders.length = 0; nextId = 1;
+  payload.riders.forEach((saved) => { addRider(saved.address); riders.at(-1).point = { address: saved.address, coords: saved.coords }; });
+  result = payload.result; result.riders = riders.filter((rider) => rider.point); render(); showResult(result, false); renderMarkers();
 }
 
 function renderSuggestions(rider) {
@@ -304,8 +386,7 @@ async function censusAddressSearch(query, signal) {
 }
 
 async function photonSearch(query, signal, publicOnly = false) {
-  // Keep search within the United States at the source. Default Photon layers
-  // include homes, streets, towns, and named public places.
+  // Search global Photon layers for homes, streets, and named public places.
   const params = new URLSearchParams({ q: query, limit: '50', lang: 'en' });
   ['house', 'street', 'other'].forEach((layer) => params.append('layer', layer));
   const anchors = riders.filter((rider) => rider.point).map((rider) => rider.point.coords);
@@ -539,8 +620,9 @@ function showResult(data, scroll, mapUrlOverride) {
   document.querySelector('#map-title').textContent = unavailable ? 'Your central meetup pin is ready.' : 'Your meetup is ready.';
   const distanceLabel = km < 1 ? `${Math.round(km * 1000)} M FROM CENTER` : `${km.toFixed(1)} KM FROM CENTER`;
   const alternate = spots.length > 1 && !unavailable ? `<button class="alternate-meetup" id="alternate-meetup" type="button">${spotIndex === 0 ? 'Want another option? Show a second nearby meetup ↗' : '← Back to the closest meetup'}</button>` : '';
-  document.querySelector('#result').innerHTML = `<article class="result-card ${unavailable ? 'result-warning' : ''}"><div class="result-label"><span>${unavailable ? 'CENTROID · CHECK A PUBLIC VENUE' : `MEETUP FOR ${group.length} RIDERS`}</span><span>${unavailable ? 'MAP DATA LIMIT' : distanceLabel}</span></div><div class="result-main"><span class="result-icon">${unavailable ? '⌖' : '✦'}</span><div class="result-name"><small>${esc(spot.type)}</small><h2>${esc(spot.name)}</h2><p>${esc(spot.address)}</p></div></div>${unavailable ? `<p class="result-message">${esc(message)}</p>` : ''}${alternate}<div class="result-footer"><span>STRAIGHT-LINE CENTER · PUBLIC MAP DATA</span><div><a href="${mapUrl}" target="_blank" rel="noreferrer" class="directions">OPEN DIRECTIONS <b>↗</b></a><button class="share" id="share">SHARE PICKUP <b>↑</b></button></div></div></article>`;
+  document.querySelector('#result').innerHTML = `<article class="result-card ${unavailable ? 'result-warning' : ''}"><div class="result-label"><span>${unavailable ? 'CENTROID · CHECK A PUBLIC VENUE' : `MEETUP FOR ${group.length} RIDERS`}</span><span>${unavailable ? 'MAP DATA LIMIT' : distanceLabel}</span></div><div class="result-main"><span class="result-icon">${unavailable ? '⌖' : '✦'}</span><div class="result-name"><small>${esc(spot.type)}</small><h2>${esc(spot.name)}</h2><p>${esc(spot.address)}</p></div></div>${unavailable ? `<p class="result-message">${esc(message)}</p>` : ''}${alternate}<div class="result-footer"><span>STRAIGHT-LINE CENTER · PUBLIC MAP DATA</span><div><a href="${mapUrl}" target="_blank" rel="noreferrer" class="directions">DIRECTIONS <b>↗</b></a><button class="share" id="share">SHARE PICKUP <b>↑</b></button><button class="save-trip" id="save-trip">${currentUser ? 'SAVE THIS CARPOOL' : 'SIGN IN TO SAVE'} <b>＋</b></button></div></div></article>`;
   document.querySelector('#share').addEventListener('click', () => share(data));
+  document.querySelector('#save-trip').addEventListener('click', saveCurrentCarpool);
   document.querySelector('#alternate-meetup')?.addEventListener('click', () => {
     data.spotIndex = spotIndex === 0 ? 1 : 0;
     data.spot = spots[data.spotIndex];
@@ -574,4 +656,6 @@ function observeSections() {
   sections.forEach((section) => observer.observe(section));
 }
 
+window.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAccount(); });
 render();
+api('/api/auth/me').then(({ user }) => { currentUser = user; render(); }).catch(() => {});

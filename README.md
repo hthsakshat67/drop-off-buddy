@@ -1,57 +1,55 @@
 # Drop-Off Buddy
 
-Find a central public meetup point for a carpool of 2–10 riders, worldwide. No account or API key is required.
+Plan a central public meetup for a carpool of 2–10 riders. Search addresses and public places worldwide, compare nearby meetup options, share directions, and optionally save plans to a private account.
 
 ## Run locally
 
+Requires Node.js 22.13+ (the backend uses Node's built-in SQLite module).
+
 ```bash
 npm install
-npm run setup:photon-us
-```
-
-The setup downloads the official Photon U.S. index (about 10.5 GB compressed) and Photon server into the ignored `.local-photon/` folder. It is one U.S.-wide, internally consistent OpenStreetMap index instead of a pile of state extracts. Java 21+ and ample free disk space are required; the included setup script can resume the large download.
-
-In one terminal, start the local geocoder:
-
-```bash
-npm run photon
-```
-
-In another terminal, start the app:
-
-```bash
 npm run dev
 ```
 
-Open `http://localhost:4178`. On localhost, searches use the local U.S. Photon index first and the public global Photon service when local results are missing. Do not open `index.html` directly as a `file://` URL; the app needs to be served over HTTP.
+Open `http://localhost:4178`. The app and its API run together; account and saved-trip records are stored in `.data/drop-off-buddy.sqlite` (ignored by Git). This SQLite database is free and local to this installation. It starts empty—there are no sample accounts or trips. No account is needed to plan, and nothing is saved unless a signed-in user taps **Save this carpool**. Back up the `.data` folder if you need to preserve local accounts between machine or disk changes.
+
+Optional: download and run the U.S. Photon index for local-first U.S. searches. This requires Java 21+, ample disk space, and a large download.
+
+```bash
+npm run setup:photon-us
+npm run photon
+```
+
+The local index is used first when running; Photon’s public global endpoint is used when local results are missing or unavailable.
+
+## Accounts and privacy
+
+- Passwords are stored as salted scrypt hashes, never plaintext. The app requires 12–128 characters for new passwords.
+- Login sessions use random, HTTP-only, SameSite cookies; only token hashes are stored in SQLite. Login/signup requests are rate limited, and write requests reject cross-origin browser origins.
+- Saved trips are scoped to the account that created them. Users can reopen or delete their own saved trips. Password recovery/email verification are not configured; the app has no email delivery service.
+- This is a self-hosted local backend, not a hosted cloud database. Other people can only use the same account database if you deploy the server and database to a shared, durable host. For an internet-facing deployment, use HTTPS and a persistent, backed-up disk; protect the host and database file. Do not expose port 4179 directly to the internet.
+- Address search is provided by Photon/OpenStreetMap (public network service by default); complete U.S. numbered addresses can also be sent to the U.S. Census Geocoder. Current location is requested only after the user opts in. A saved trip contains the addresses/coordinates and meetup details, and is written only after an explicit save action.
 
 ## How it works
 
-1. Global autocomplete searches Photon/OpenStreetMap for numbered addresses, named roads, intersections, schools, and other places. A U.S. Census address-range lookup is an additional fallback for complete U.S. addresses.
-2. Selected locations are checked to keep riders within 250 km of one another, then their coordinates are averaged for a center point.
-3. Photon/OpenStreetMap is searched for nearby parks, libraries, colleges, universities, and clearly identified high schools. Preschools, kindergartens, elementary, and primary schools are excluded as meetup suggestions.
-4. Pick the closest suggestion or switch to a second nearby meetup, then open directions or share the pickup plan.
+1. Photon/OpenStreetMap autocomplete finds numbered addresses, named roads, intersections, schools, and other places worldwide. Coverage depends on available OpenStreetMap data; no single official census/address source covers every country. The Census fallback applies only to U.S. addresses and can interpolate a point along a road rather than verify a rooftop.
+2. Selected points are checked against the 250 km group limit, then averaged to compute a central point.
+3. Photon/OpenStreetMap is queried for public libraries, parks, colleges, universities, and clearly identified high schools. Preschools, kindergartens, elementary and primary schools are excluded as meetup suggestions. Venue data does not prove a location is open, accessible, or safe at a particular time; verify before meeting.
+4. Choose a nearby option or a second suggestion, open map directions, share, or explicitly save the plan to your account.
 
-International address coverage comes from OpenStreetMap-powered Photon. A local U.S. index is used when it has matches, with the public global Photon service used when the local index has none. Coverage varies by country and map contributions; there is no single official census/address dataset for every nation. Census is used only for U.S. address ranges, which can return interpolated road positions and do not confirm a rooftop or that every structure number exists.
-
-If map data contains no suitable nearby public venue, the app shows the true center coordinate and says it could not confirm a public venue. Map data does not prove that a site is open, accessible, or safe at a given time; confirm the location before meeting.
-
-## Privacy and accounts
-
-There is no login system or cloud account in this version. Carpool inputs remain in page memory and are cleared when the page is refreshed or closed; the app does not save them to local storage. Address searches are sent to Photon (local first on localhost, then the public service if needed); complete U.S. addresses can be sent to the Census Geocoder. Current location is requested only after the user taps the location button. Do not enter information you do not want sent to those services. Account-backed saving requires a real authentication/backend setup and is not simulated in the client.
-
-## Services and data sources
-
-- [Photon](https://github.com/komoot/photon) provides address, road, and nearby-place search from OpenStreetMap data.
-- [Photon U.S. database downloads](https://download1.graphhopper.com/public/north-america/usa/) provide the prebuilt U.S. index used by the local server.
-- [OpenStreetMap](https://www.openstreetmap.org/copyright) provides the map data and tiles.
-- [U.S. Census Geocoder](https://www.census.gov/programs-surveys/geography/technical-documentation/complete-technical-documentation/census-geocoder.html) provides a nationwide address-range fallback for complete numbered addresses. Its locations are interpolated along Census address ranges, not guaranteed rooftop locations.
-- [Leaflet](https://leafletjs.com/) displays the map.
-
-When the local index is running, address text and selected coordinates are sent to the local Photon service on this computer. If local Photon is unavailable, the app queries the free public Photon service. A complete numbered U.S. address may be sent to the Census Geocoder to resolve an address range. Drop-Off Buddy does not store addresses on its own server.
-
-## Build
+## Build, serve, and test
 
 ```bash
 npm run build
+npm start
 ```
+
+`npm start` serves the production build and API on port 4179 (or `$PORT`). Run `npm test` for backend tests covering signup, persistent storage, private account ownership, logout, password policy, and cross-origin rejection.
+
+## Data and libraries
+
+- [Photon](https://github.com/komoot/photon) and [OpenStreetMap](https://www.openstreetmap.org/copyright): worldwide address/place search and map tiles.
+- [U.S. Census Geocoder](https://www.census.gov/programs-surveys/geography/technical-documentation/complete-technical-documentation/census-geocoder.html): U.S.-only numbered-address fallback.
+- [Leaflet](https://leafletjs.com/): interactive map.
+- Node.js built-ins (`node:sqlite`, HTTP, crypto): local persistence and account/session backend.
+- [Photon U.S. database downloads](https://download1.graphhopper.com/public/north-america/usa/): optional large local U.S. search index.
